@@ -22,9 +22,6 @@ spec:
         - name: gateway
           image: bethvourc/gateway
           resources:
-            limits:
-              memory: "200Mi"
-              cpu: "1000m"
           envFrom:
             - configMapRef:
                 name: gateway-configmap

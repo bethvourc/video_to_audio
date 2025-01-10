@@ -6,7 +6,7 @@ from auth_svc import access
 from storage import util
 
 server = Flask(__name__)
-server.config["MONGO_URI"] = "mongodb://host.minikube.internal:271017/videos"
+server.config["MONGO_URI"] = "mongodb://host.minikube.internal:27017/videos"
 
 mongo = PyMongo(server) # wrap flask server to allow us to interface with mongo db
 
