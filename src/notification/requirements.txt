@@ -21,7 +21,7 @@ pillow==12.2.0
 proglog==0.1.10
 PyJWT==2.12.0
 pymongo==4.10.1
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 requests==2.32.4
 setuptools==78.1.1
 tqdm==4.67.1
