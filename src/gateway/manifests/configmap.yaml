@@ -4,3 +4,5 @@ metadata:
   name: gateway-configmap
 data:
   AUTH_SVC_ADDRESS: "auth:5000"
+  AUTH_REQUEST_TIMEOUT: "5"
+  MAX_UPLOAD_BYTES: "104857600"

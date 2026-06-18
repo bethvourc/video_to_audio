@@ -1,4 +1,8 @@
-import os, gridfs, pika, json
+import json
+import os
+
+import gridfs
+import pika
 from flask import Flask, request, send_file
 from flask_pymongo import PyMongo
 from auth import validate
@@ -7,6 +11,9 @@ from storage import util
 from bson.objectid import ObjectId
 
 server = Flask(__name__)
+server.config["MAX_CONTENT_LENGTH"] = int(
+    os.environ.get("MAX_UPLOAD_BYTES", 100 * 1024 * 1024)
+)
 
 mongo_video = PyMongo(server, uri="mongodb://host.minikube.internal:27017/videos")
 
@@ -43,6 +50,9 @@ def upload():
             return "exactly 1 file required", 400
 
         for _, f in request.files.items():
+            if not util.is_allowed_video(f):
+                return "unsupported file type", 400
+
             err = util.upload(f, fs_videos, channel, access)
 
             if err:

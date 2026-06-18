@@ -1,14 +1,31 @@
-import jwt, datetime, os
+import datetime
+import os
+
+import jwt
 from flask import Flask, request
 from flask_mysqldb import MySQL
+from werkzeug.security import check_password_hash
 
 server = Flask(__name__)
 mysql = MySQL(server)
 
+JWT_SECRET = os.environ.get("JWT_SECRET")
+MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
+
+if (
+    not JWT_SECRET
+    or len(JWT_SECRET) < 32
+    or JWT_SECRET.startswith("CHANGE_ME")
+):
+    raise RuntimeError("JWT_SECRET must be set to at least 32 characters")
+
+if not MYSQL_PASSWORD or MYSQL_PASSWORD.startswith("CHANGE_ME"):
+    raise RuntimeError("MYSQL_PASSWORD must be set to a deployment secret")
+
 # config
 server.config["MYSQL_HOST"] = os.environ.get("MYSQL_HOST")
 server.config["MYSQL_USER"] = os.environ.get("MYSQL_USER")
-server.config["MYSQL_PASSWORD"] = os.environ.get("MYSQL_PASSWORD")
+server.config["MYSQL_PASSWORD"] = MYSQL_PASSWORD
 server.config["MYSQL_DB"] = os.environ.get("MYSQL_DB")
 server.config["MYSQL_PORT"] = int(os.environ.get("MYSQL_PORT"))
 
@@ -30,40 +47,44 @@ def login():
         email = user_row[0]
         password = user_row[1]
 
-        if auth.username != email or auth.password != password:
+        if auth.username != email or not check_password_hash(password, auth.password):
             return "invalid credentials", 401
         else:
-            return createJWT(auth.username, os.environ.get("JWT_SECRET"), True)
+            return createJWT(auth.username, JWT_SECRET, True)
     else:
         return "invalid credentials", 401
 
 
 @server.route("/validate", methods=["POST"])
 def validate():
-    encoded_jwt = request.headers["Authorization"]
+    authorization = request.headers.get("Authorization")
 
-    if not encoded_jwt:
+    if not authorization:
         return "missing credentials", 401
 
-    encoded_jwt = encoded_jwt.split(" ")[1]
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return "missing credentials", 401
+
+    encoded_jwt = parts[1]
 
     try:
         decoded = jwt.decode(
-            encoded_jwt, os.environ.get("JWT_SECRET"), algorithms=["HS256"]
+            encoded_jwt, JWT_SECRET, algorithms=["HS256"]
         )
-    except:
+    except jwt.InvalidTokenError:
         return "not authorized", 403
 
     return decoded, 200
 
 
 def createJWT(username, secret, authz):
+    now = datetime.datetime.now(tz=datetime.timezone.utc)
     return jwt.encode(
         {
             "username": username,
-            "exp": datetime.datetime.now(tz=datetime.timezone.utc)
-            + datetime.timedelta(days=1),
-            "iat": datetime.datetime.utcnow(),
+            "exp": now + datetime.timedelta(days=1),
+            "iat": now,
             "admin": authz,
         },
         secret,
