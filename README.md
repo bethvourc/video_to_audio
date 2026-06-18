@@ -30,7 +30,7 @@ This service handles user login and JWT-based authentication:
 
 It is deployed with the following Kubernetes resources:
 - **Deployment** (`auth-deploy.yaml`): Configures the service with 2 replicas.
-- **ConfigMap** (`auth-configmap.yaml`): Stores MySQL and JWT secret configuration.
+- **ConfigMap** (`auth-configmap.yaml`): Stores non-sensitive MySQL configuration.
 - **Secret** (`auth-secret.yaml`): Stores sensitive information like MySQL password and JWT secret.
 - **Service** (`auth-service.yaml`): Exposes the authentication service within the cluster.
 
@@ -61,8 +61,7 @@ It is deployed with the following Kubernetes resources:
 RabbitMQ is used for message queuing between services:
 - **StatefulSet** (`statefulset.yaml`): Ensures that RabbitMQ runs with persistent storage.
 - **PersistentVolumeClaim** (`pvc.yaml`): Requests persistent storage for RabbitMQ.
-- **Service** (`service.yaml`): Exposes RabbitMQ to the Kubernetes cluster.
-- **Ingress** (`ingress.yaml`): Allows external access to RabbitMQ management interface.
+- **Service** (`service.yaml`): Exposes RabbitMQ inside the Kubernetes cluster.
 - **ConfigMap** (`rabbitmq-configmap.yaml`): Configures RabbitMQ settings.
 - **Secret** (`rabbitmq-secret.yaml`): Stores sensitive RabbitMQ configuration.
 
@@ -117,7 +116,7 @@ Set the following environment variables:
 - `MYSQL_PASSWORD`: The MySQL user's password.
 - `MYSQL_DB`: The name of the database.
 - `MYSQL_PORT`: The port for MySQL.
-- `JWT_SECRET`: The secret key used for signing JWT tokens.
+- `JWT_SECRET`: A random 32+ character secret key used for signing JWT tokens.
 - `VIDEO_QUEUE`: The RabbitMQ queue name for video files.
 - `MP3_QUEUE`: The RabbitMQ queue name for MP3 conversion.
 - `GMAIL_ADDRESS`: The Gmail address used to send email notifications.
@@ -150,7 +149,6 @@ python server.py
 kubectl apply -f statefulset.yaml
 kubectl apply -f pvc.yaml
 kubectl apply -f service.yaml
-kubectl apply -f ingress.yaml
 ```
 
 ## Endpoints

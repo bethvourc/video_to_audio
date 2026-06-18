@@ -1,4 +1,4 @@
-CREATE USER 'auth_user'@'localhost' IDENTIFIED BY 'Auth123';
+CREATE USER 'auth_user'@'localhost' IDENTIFIED BY 'CHANGE_ME_AUTH_DB_PASSWORD';
 
 CREATE DATABASE auth;
 
@@ -12,4 +12,7 @@ CREATE TABLE user (
     password VARCHAR(255) NOT NULL
 );
 
-INSERT INTO user (email, password) VALUES ('beth@email.com', 'Admin123');
+INSERT INTO user (email, password) VALUES (
+    'beth@email.com',
+    'scrypt:32768:8:1$33DiVGQ5fPhB41hf$131f513b8d9f2ad7d298f3995afdefe95016f97f2a2dad25219d5915973f624be8934875b0f0a09932883e9da81922d2b4629d8d498040328073b73ad66d9881'
+);
