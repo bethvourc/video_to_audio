@@ -2,9 +2,22 @@ import json
 import os
 
 import pika
+from pymongo.errors import PyMongoError
 from werkzeug.utils import secure_filename
 
 ALLOWED_VIDEO_EXTENSIONS = {"avi", "m4v", "mkv", "mov", "mp4", "webm"}
+ISO_BASE_MEDIA_EXTENSIONS = {"m4v", "mov", "mp4"}
+EBML_EXTENSIONS = {"mkv", "webm"}
+
+
+def _container_matches(extension, header):
+    if extension in ISO_BASE_MEDIA_EXTENSIONS:
+        return len(header) >= 12 and header[4:8] == b"ftyp"
+    if extension in EBML_EXTENSIONS:
+        return header.startswith(b"\x1aE\xdf\xa3")
+    if extension == "avi":
+        return len(header) >= 12 and header[:4] == b"RIFF" and header[8:12] == b"AVI "
+    return False
 
 
 def is_allowed_video(file_storage):
@@ -20,7 +33,9 @@ def is_allowed_video(file_storage):
     if content_type and not content_type.startswith("video/"):
         return False
 
-    return True
+    header = file_storage.stream.read(16)
+    file_storage.stream.seek(0)
+    return _container_matches(extension, header)
 
 
 def upload(f, fs, channel, access):
@@ -30,9 +45,8 @@ def upload(f, fs, channel, access):
             content_type=f.mimetype,
             filename=secure_filename(f.filename or ""),
             uploaded_by=access["username"],
-            max_upload_bytes=int(os.environ.get("MAX_UPLOAD_BYTES", 100 * 1024 * 1024)),
         )
-    except Exception as err:
+    except PyMongoError as err:
         print(err)
         return "internal server error", 500
 
@@ -45,13 +59,16 @@ def upload(f, fs, channel, access):
     try:
         channel.basic_publish(
             exchange="",
-            routing_key="video",
+            routing_key=os.environ.get("VIDEO_QUEUE", "video"),
             body=json.dumps(message),
             properties=pika.BasicProperties(
                 delivery_mode=pika.spec.PERSISTENT_DELIVERY_MODE
             ),
         )
-    except Exception as err:
+    except pika.exceptions.AMQPError as err:
         print(err)
-        fs.delete(fid)
+        try:
+            fs.delete(fid)
+        except PyMongoError:
+            pass
         return "internal server error", 500

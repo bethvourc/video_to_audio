@@ -12,21 +12,37 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 8
+      maxSurge: 1
+      maxUnavailable: 1
   template:
     metadata:
       labels:
         app: notification
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: notification
           image: bethvourc/notification
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
           resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
             limits:
-              memory: "200Mi"
-              cpu: "1000m"          
+              memory: "128Mi"
+              cpu: "500m"
           envFrom:
             - configMapRef:
                 name: notification-configmap
             - secretRef:
                 name: notification-secret
+            - secretRef:
+                name: rabbitmq-secret

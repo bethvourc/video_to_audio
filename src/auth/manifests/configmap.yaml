@@ -7,3 +7,6 @@ data:
   MYSQL_USER: auth_user
   MYSQL_DB: auth
   MYSQL_PORT: "3306"
+  JWT_ISSUER: "video-to-audio-auth"
+  JWT_AUDIENCE: "video-to-audio-api"
+  JWT_TTL_SECONDS: "3600"

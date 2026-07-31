@@ -117,10 +117,36 @@ Set the following environment variables:
 - `MYSQL_DB`: The name of the database.
 - `MYSQL_PORT`: The port for MySQL.
 - `JWT_SECRET`: A random 32+ character secret key used for signing JWT tokens.
+- `JWT_ISSUER`, `JWT_AUDIENCE`, and `JWT_TTL_SECONDS`: JWT validation policy.
+- `MONGO_VIDEO_URI`: An authenticated MongoDB URI whose default database stores videos.
+- `MONGO_MP3_URI`: An authenticated MongoDB URI whose default database stores MP3s.
+- `RABBITMQ_DEFAULT_USER` and `RABBITMQ_DEFAULT_PASS`: Non-default RabbitMQ credentials.
 - `VIDEO_QUEUE`: The RabbitMQ queue name for video files.
 - `MP3_QUEUE`: The RabbitMQ queue name for MP3 conversion.
 - `GMAIL_ADDRESS`: The Gmail address used to send email notifications.
 - `GMAIL_PASSWORD`: The Gmail password for sending email notifications.
+
+Do not commit real values to the example Secret manifests. Create deployment Secrets out of
+band, for example:
+
+```bash
+kubectl create secret generic mongo-secret \
+  --from-literal=MONGO_VIDEO_URI='mongodb://user:password@mongodb.example:27017/videos?authSource=admin' \
+  --from-literal=MONGO_MP3_URI='mongodb://user:password@mongodb.example:27017/mp3s?authSource=admin'
+```
+
+Replace every `CHANGE_ME` value in the auth, notification, and RabbitMQ Secret manifests before
+deployment. The services fail closed when placeholder credentials are present. Provision the
+MySQL `auth_user` separately with only the privileges it needs on the `auth` database; `init.sql`
+creates only the schema and does not create a default account.
+
+Passwords stored in the `user` table must be Werkzeug hashes, not plaintext. New users are
+non-admin by default; grant `is_admin` only to accounts that may upload and download conversions.
+Generate a hash with:
+
+```bash
+python -c 'from werkzeug.security import generate_password_hash; import getpass; print(generate_password_hash(getpass.getpass()))'
+```
 
 ### 4. Run the Services
 
@@ -151,6 +177,13 @@ kubectl apply -f pvc.yaml
 kubectl apply -f service.yaml
 ```
 
+### 5. Run the Tests
+
+```bash
+python -m pip install -r requirements-test.txt
+pytest -q
+```
+
 ## Endpoints
 
 ### 1. **Login** (`POST /login`)
@@ -164,3 +197,13 @@ Uploads a video file for conversion. Only admins can upload videos.
 ### 3. **Download MP3** (`GET /download`)
 
 Downloads a converted MP3 file. You must provide the `fid` (file ID) of the desired MP3.
+The authenticated user can retrieve only files created by that same account.
+
+## Security Notes
+
+- The public ingress requires TLS and applies a request-rate limit and a 100 MiB upload limit.
+- Uploaded files must have a supported extension, video media type, and matching container signature.
+- RabbitMQ poison messages are dead-lettered instead of being retried indefinitely.
+- Containers run as non-root with privilege escalation disabled; application containers use a
+  read-only root filesystem.
+- RabbitMQ's management port is not exposed by the Kubernetes Service.
