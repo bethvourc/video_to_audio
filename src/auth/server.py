@@ -2,7 +2,7 @@ import datetime
 import os
 
 import jwt
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from flask_mysqldb import MySQL
 from werkzeug.security import check_password_hash
 
@@ -11,6 +11,9 @@ mysql = MySQL(server)
 
 JWT_SECRET = os.environ.get("JWT_SECRET")
 MYSQL_PASSWORD = os.environ.get("MYSQL_PASSWORD")
+JWT_ISSUER = os.environ.get("JWT_ISSUER", "video-to-audio-auth")
+JWT_AUDIENCE = os.environ.get("JWT_AUDIENCE", "video-to-audio-api")
+JWT_TTL_SECONDS = int(os.environ.get("JWT_TTL_SECONDS", "3600"))
 
 if (
     not JWT_SECRET
@@ -22,6 +25,9 @@ if (
 if not MYSQL_PASSWORD or MYSQL_PASSWORD.startswith("CHANGE_ME"):
     raise RuntimeError("MYSQL_PASSWORD must be set to a deployment secret")
 
+if JWT_TTL_SECONDS < 60 or JWT_TTL_SECONDS > 86400:
+    raise RuntimeError("JWT_TTL_SECONDS must be between 60 and 86400")
+
 # config
 server.config["MYSQL_HOST"] = os.environ.get("MYSQL_HOST")
 server.config["MYSQL_USER"] = os.environ.get("MYSQL_USER")
@@ -30,29 +36,31 @@ server.config["MYSQL_DB"] = os.environ.get("MYSQL_DB")
 server.config["MYSQL_PORT"] = int(os.environ.get("MYSQL_PORT"))
 
 
+@server.get("/healthz")
+def healthz():
+    return "ok", 200
+
+
 @server.route("/login", methods=["POST"])
 def login():
     auth = request.authorization
-    if not auth:
+    if not auth or not auth.username or not auth.password:
         return "missing credentials", 401
 
-    # check db for username and password
     cur = mysql.connection.cursor()
-    res = cur.execute(
-        "SELECT email, password FROM user WHERE email=%s", (auth.username,)
-    )
+    try:
+        res = cur.execute(
+            "SELECT email, password, is_admin FROM user WHERE email=%s",
+            (auth.username,),
+        )
+        user_row = cur.fetchone() if res > 0 else None
+    finally:
+        cur.close()
 
-    if res > 0:
-        user_row = cur.fetchone()
-        email = user_row[0]
-        password = user_row[1]
-
-        if auth.username != email or not check_password_hash(password, auth.password):
-            return "invalid credentials", 401
-        else:
-            return createJWT(auth.username, JWT_SECRET, True)
-    else:
+    if not user_row or not check_password_hash(user_row[1], auth.password):
         return "invalid credentials", 401
+
+    return create_jwt(user_row[0], is_admin=bool(user_row[2]))
 
 
 @server.route("/validate", methods=["POST"])
@@ -70,24 +78,32 @@ def validate():
 
     try:
         decoded = jwt.decode(
-            encoded_jwt, JWT_SECRET, algorithms=["HS256"]
+            encoded_jwt,
+            JWT_SECRET,
+            algorithms=["HS256"],
+            audience=JWT_AUDIENCE,
+            issuer=JWT_ISSUER,
+            options={"require": ["exp", "iat", "sub", "admin"]},
         )
     except jwt.InvalidTokenError:
-        return "not authorized", 403
+        return "not authorized", 401
 
-    return decoded, 200
+    return jsonify(decoded), 200
 
 
-def createJWT(username, secret, authz):
+def create_jwt(username, is_admin):
     now = datetime.datetime.now(tz=datetime.timezone.utc)
     return jwt.encode(
         {
+            "sub": username,
             "username": username,
-            "exp": now + datetime.timedelta(days=1),
+            "iss": JWT_ISSUER,
+            "aud": JWT_AUDIENCE,
+            "exp": now + datetime.timedelta(seconds=JWT_TTL_SECONDS),
             "iat": now,
-            "admin": authz,
+            "admin": is_admin,
         },
-        secret,
+        JWT_SECRET,
         algorithm="HS256",
     )
 

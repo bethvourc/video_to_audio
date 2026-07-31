@@ -3,7 +3,8 @@ kind: StatefulSet
 metadata:
   name: rabbitmq
 spec:
-  serviceName: "not-applicable"
+  serviceName: "rabbitmq"
+  replicas: 1
   selector:
     matchLabels:
       app: rabbitmq
@@ -12,16 +13,47 @@ spec:
       labels:
         app: rabbitmq
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: rabbitmq
-          image: rabbitmq:3-management
+          image: rabbitmq:3
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              case "${RABBITMQ_DEFAULT_USER}:${RABBITMQ_DEFAULT_PASS}" in
+                *CHANGE_ME*|:) echo "RabbitMQ credentials must be replaced"; exit 1 ;;
+              esac
+              exec docker-entrypoint.sh rabbitmq-server
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           ports:
-            - name: http
-              protocol: TCP
-              containerPort: 15672
             - name: amqp
               protocol: TCP
               containerPort: 5672
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "status"]
+            initialDelaySeconds: 30
+            periodSeconds: 30
           envFrom:
             - configMapRef:
                 name: rabbitmq-configmap

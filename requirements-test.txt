@@ -1,0 +1,3 @@
+-r src/gateway/requirements.txt
+-r src/converter/requirements.txt
+pytest==9.0.3
