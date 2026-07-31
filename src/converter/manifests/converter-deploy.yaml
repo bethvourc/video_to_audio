@@ -12,21 +12,44 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 8
+      maxSurge: 1
+      maxUnavailable: 1
   template:
     metadata:
       labels:
         app: converter
     spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: converter
           image: bethvourc/converter
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
           resources:
+            requests:
+              memory: "100Mi"
+              cpu: "250m"
             limits:
-              memory: "200Mi"
-              cpu: "1000m"          
+              memory: "512Mi"
+              cpu: "1000m"
           envFrom:
             - configMapRef:
                 name: converter-configmap
             - secretRef:
-                name: converter-secret
+                name: rabbitmq-secret
+            - secretRef:
+                name: mongo-secret
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 250Mi
